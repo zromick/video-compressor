@@ -9,7 +9,9 @@ param(
     [switch]$DeleteOriginal,
     [string]$OutputSuffix = "_compressed",
     [string]$OutputDir = $null,  # Optional: Output to a different directory with mirrored structure
-    [switch]$PickFolder  # Show GUI folder picker dialog
+    [switch]$PickFolder,  # Show GUI folder picker dialog
+    [switch]$MoveToSource,  # Move compressed files back to source location (requires -OutputDir)
+    [switch]$DeleteOutputDir  # Delete OutputDir after moving all files (requires -MoveToSource)
 )
 
 # Show folder picker if requested
@@ -50,6 +52,17 @@ if (-not (Test-FFmpeg)) {
     exit 1
 }
 
+# Validate parameter dependencies
+if ($MoveToSource -and -not $OutputDir) {
+    Write-Host "Error: -MoveToSource requires -OutputDir to be specified" -ForegroundColor Red
+    exit 1
+}
+
+if ($DeleteOutputDir -and -not $MoveToSource) {
+    Write-Host "Error: -DeleteOutputDir requires -MoveToSource to be enabled" -ForegroundColor Red
+    exit 1
+}
+
 # Quality presets (CRF values: lower = better quality, higher = smaller file)
 $qualitySettings = @{
     "low"    = @{ crf = 28; preset = "faster"; description = "Lowest quality (smallest files)" }
@@ -66,6 +79,12 @@ Write-Host "  Recursive: $(-not $NoRecursive)" -ForegroundColor Gray
 Write-Host "  Keep originals: $(-not $DeleteOriginal) (creates _compressed.mp4 files)" -ForegroundColor Gray
 if ($OutputDir) {
     Write-Host "  Output directory: $OutputDir (mirrored structure)" -ForegroundColor Gray
+    if ($MoveToSource) {
+        Write-Host "  Move to source: Enabled (files moved after compression)" -ForegroundColor Gray
+    }
+    if ($DeleteOutputDir) {
+        Write-Host "  Delete output dir: Enabled (cleanup after completion)" -ForegroundColor Gray
+    }
 }
 Write-Host ""
 
@@ -102,6 +121,7 @@ Write-Host "Found $($files.Count) video(s) to compress`n" -ForegroundColor Green
 $totalOriginalSize = 0
 $totalCompressedSize = 0
 $processedCount = 0
+$allFilesSucceeded = $true
 
 foreach ($file in $files) {
     $processedCount++
@@ -163,6 +183,21 @@ foreach ($file in $files) {
         Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
         Write-Host "  Saved: $([math]::Round($savedBytes / 1MB, 2)) MB ($savedPercent%)" -ForegroundColor $(if ($savedPercent -gt 0) { "Green" } else { "Yellow" })
 
+        # Move to source location if requested
+        if ($MoveToSource) {
+            $sourceDir = $file.Directory.FullName
+            $movedFileName = $file.BaseName + $OutputSuffix + $file.Extension
+            $movedPath = Join-Path $sourceDir $movedFileName
+
+            try {
+                Move-Item -Path $outputPath -Destination $movedPath -Force
+                Write-Host "  Moved to source: $movedFileName" -ForegroundColor Cyan
+            } catch {
+                Write-Host "  Failed to move to source: $_" -ForegroundColor Red
+                $allFilesSucceeded = $false
+            }
+        }
+
         # Delete original only if explicitly requested AND not using separate output directory
         if ($DeleteOriginal -and -not $OutputDir) {
             Remove-Item $file.FullName -Force
@@ -173,6 +208,7 @@ foreach ($file in $files) {
             Write-Host "  Kept original file" -ForegroundColor Gray
         }
     } else {
+        $allFilesSucceeded = $false
         Write-Host " Failed!" -ForegroundColor Red
         # Show last few lines of FFmpeg output for debugging
         $errorLines = $ffmpegOutput -split "`n" | Select-Object -Last 5
@@ -196,3 +232,13 @@ Write-Host "Total original size: $([math]::Round($totalOriginalSize / 1MB, 2)) M
 Write-Host "Total compressed size: $([math]::Round($totalCompressedSize / 1MB, 2)) MB"
 Write-Host "Total saved: $([math]::Round($totalSaved / 1MB, 2)) MB ($totalSavedPercent%)" -ForegroundColor Green
 Write-Host ("=" * 50) -ForegroundColor Cyan
+
+# Clean up output directory if requested and all files succeeded
+if ($DeleteOutputDir -and $MoveToSource -and $allFilesSucceeded) {
+    try {
+        Remove-Item -Path $OutputDir -Recurse -Force
+        Write-Host "`nCleaned up output directory: $OutputDir" -ForegroundColor Green
+    } catch {
+        Write-Host "`nFailed to delete output directory: $_" -ForegroundColor Yellow
+    }
+}

@@ -56,6 +56,21 @@ Output: Desktop\CompressedVideos\2024\Vacation\video.mp4
 
 Creates `*_compressed.mp4` files in the same folder.
 
+### OneDrive: Compress, Move Back, Auto-Cleanup
+
+```powershell
+.\compress-videos.ps1 `
+  -Path "C:\Users\YourName\OneDrive\Videos" `
+  -OutputDir "C:\Users\YourName\Desktop\Temp" `
+  -MoveToSource `
+  -DeleteOutputDir
+```
+
+**What this does:**
+- Compresses to Desktop (avoids OneDrive sync during encoding)
+- Moves compressed files back to OneDrive next to originals
+- Deletes temp folder automatically after completion
+
 ### Test One File First
 
 ```powershell
@@ -108,6 +123,8 @@ Creates `*_compressed.mp4` files in the same folder.
 | `-Quality` | String | `medium` | `low` \| `medium` \| `high` |
 | `-NoRecursive` | Switch | Off | Only process top folder (no subfolders) |
 | `-DeleteOriginal` | Switch | Off | ⚠️ Delete source files after compression |
+| `-MoveToSource` | Switch | Off | Move compressed files to source location (requires `-OutputDir`) |
+| `-DeleteOutputDir` | Switch | Off | Delete output directory after moving all files (requires `-MoveToSource`) |
 
 **Note:** When using `-OutputDir`, files are always kept in source location (no `_compressed` suffix).
 
@@ -337,6 +354,9 @@ A: Yes! Works on local, USB, network, and cloud drives.
 
 **Q: Why use `-OutputDir`?**  
 A: Avoids OneDrive sync conflicts, keeps source clean, easier to review before deleting originals.
+
+**Q: Why use `-MoveToSource` instead of compressing directly to source?**  
+A: Cloud sync services (OneDrive, Dropbox, Google Drive) can interfere with FFmpeg writing files. Compressing to a temp location first, then moving when complete, avoids sync conflicts and corruption during encoding.
 
 ---
 
