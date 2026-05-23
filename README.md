@@ -242,10 +242,8 @@ compress-videos.ps1 -Path "C:\Any\Folder" -OutputDir "C:\Output"
 
 | File | Purpose |
 |------|---------|
-| `compress-videos.ps1` | Main compression script |
-| `Compress Videos.bat` | Folder picker launcher (easiest) |
-| `compress-any-folder.ps1` | Folder picker backend |
-| `compress-videos-here.bat` | Compress current directory |
+| `compress-videos.ps1` | Main compression script (supports -PickFolder for GUI) |
+| `Compress Videos.bat` | Folder picker launcher (double-click to run) |
 | `test-single-file.ps1` | Test on one video |
 | `install-context-menu.ps1` | Add right-click menu |
 | `README.md` | This file |

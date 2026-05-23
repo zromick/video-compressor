@@ -15,5 +15,5 @@ echo.
 REM Get the directory where this batch file is located
 set SCRIPT_DIR=%~dp0
 
-REM Run the folder picker PowerShell script
-powershell.exe -ExecutionPolicy Bypass -File "%SCRIPT_DIR%compress-any-folder.ps1"
+REM Run the compression script with folder picker
+powershell.exe -ExecutionPolicy Bypass -File "%SCRIPT_DIR%compress-videos.ps1" -PickFolder

@@ -8,8 +8,30 @@ param(
     [switch]$NoRecursive,
     [switch]$DeleteOriginal,
     [string]$OutputSuffix = "_compressed",
-    [string]$OutputDir = $null  # Optional: Output to a different directory with mirrored structure
+    [string]$OutputDir = $null,  # Optional: Output to a different directory with mirrored structure
+    [switch]$PickFolder  # Show GUI folder picker dialog
 )
+
+# Show folder picker if requested
+if ($PickFolder) {
+    Add-Type -AssemblyName System.Windows.Forms
+    $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+    $folderBrowser.Description = "Select folder containing videos to compress"
+    $folderBrowser.ShowNewFolderButton = $false
+
+    $result = $folderBrowser.ShowDialog()
+
+    if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+        $Path = $folderBrowser.SelectedPath
+        Write-Host "`nSelected folder: $Path" -ForegroundColor Cyan
+        Write-Host ""
+    } else {
+        Write-Host "No folder selected. Exiting..." -ForegroundColor Yellow
+        Write-Host "`nPress any key to exit..."
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        exit 0
+    }
+}
 
 # Check if FFmpeg is installed
 function Test-FFmpeg {
