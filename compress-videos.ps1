@@ -69,12 +69,13 @@ if ($OutputDir) {
 }
 Write-Host ""
 
-# Find all MP4 files (recursive by default)
+# Find all video files (recursive by default)
+$videoExtensions = @("*.mp4", "*.mov", "*.avi", "*.mkv", "*.wmv", "*.flv", "*.webm", "*.m4v", "*.3gp", "*.mpg", "*.mpeg", "*.m2v", "*.ogv")
 $searchPath = Resolve-Path $Path
 $files = if ($NoRecursive) {
-    Get-ChildItem -Path $searchPath -Filter "*.mp4" -File
+    Get-ChildItem -Path $searchPath -Include $videoExtensions -File
 } else {
-    Get-ChildItem -Path $searchPath -Filter "*.mp4" -File -Recurse
+    Get-ChildItem -Path $searchPath -Include $videoExtensions -File -Recurse
 }
 
 # Filter out already compressed files
@@ -92,7 +93,7 @@ if ($OutputDir) {
 }
 
 if ($files.Count -eq 0) {
-    Write-Host "No MP4 files found in $searchPath" -ForegroundColor Yellow
+    Write-Host "No video files found in $searchPath" -ForegroundColor Yellow
     exit 0
 }
 

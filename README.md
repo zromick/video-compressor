@@ -1,6 +1,8 @@
 # 🎥 Video Compressor
 
-**Batch compress MP4 videos to save 40-70% disk space while keeping your originals safe.**
+**Batch compress videos to save 40-70% disk space while keeping your originals safe.**
+
+Supports: MP4, MOV, AVI, MKV, WMV, FLV, WebM, M4V, 3GP, MPG, MPEG, M2V, OGV
 
 Works on any folder - perfect for OneDrive, external drives, or network shares. Outputs to a separate location with mirrored folder structure.
 
@@ -316,7 +318,7 @@ A: No! Use `-OutputDir` to compress to a different location.
 A: Slightly, but most people won't notice with medium/high settings. Test first!
 
 **Q: What formats are supported?**  
-A: Currently only MP4 input files. Output is always MP4 (H.264 + AAC).
+A: Input: MP4, MOV, AVI, MKV, WMV, FLV, WebM, M4V, 3GP, MPG, MPEG, M2V, OGV. Output is always MP4 (H.264 + AAC).
 
 **Q: Can I stop mid-compression?**  
 A: Yes, press Ctrl+C. Already compressed files won't be re-processed.

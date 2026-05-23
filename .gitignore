@@ -6,6 +6,12 @@
 *.wmv
 *.flv
 *.webm
+*.m4v
+*.3gp
+*.mpg
+*.mpeg
+*.m2v
+*.ogv
 
 # Ignore test outputs
 *_TEST_compressed*
