@@ -65,12 +65,26 @@ if ($DeleteOutputDir -and -not $MoveToSource) {
 
 # Quality presets (CRF values: lower = better quality, higher = smaller file)
 $qualitySettings = @{
-    "low"    = @{ crf = 28; preset = "faster"; description = "Lowest quality (smallest files)" }
-    "medium" = @{ crf = 23; preset = "medium"; description = "Balanced quality/size (recommended)" }
-    "high"   = @{ crf = 20; preset = "slow"; description = "Higher quality (larger files)" }
+    "low"    = @{ crf = 28; preset = "faster"; description = "Lowest quality (smallest files)"; expectedBitrate = 800 }
+    "medium" = @{ crf = 23; preset = "medium"; description = "Balanced quality/size (recommended)"; expectedBitrate = 1500 }
+    "high"   = @{ crf = 20; preset = "slow"; description = "Higher quality (larger files)"; expectedBitrate = 2500 }
 }
 
 $settings = $qualitySettings[$Quality]
+
+# Function to get video bitrate
+function Get-VideoBitrate {
+    param([string]$FilePath)
+    try {
+        $bitrateStr = & ffprobe -v error -select_streams v:0 -show_entries stream=bit_rate -of default=noprint_wrappers=1:nokey=1 $FilePath 2>&1
+        if ($bitrateStr -match '^\d+$') {
+            return [int]$bitrateStr
+        }
+        return $null
+    } catch {
+        return $null
+    }
+}
 
 Write-Host "`nVideo Compression Settings:" -ForegroundColor Cyan
 Write-Host "  Quality: $Quality - $($settings.description)" -ForegroundColor Gray
@@ -121,6 +135,7 @@ Write-Host "Found $($files.Count) video(s) to compress`n" -ForegroundColor Green
 $totalOriginalSize = 0
 $totalCompressedSize = 0
 $processedCount = 0
+$skippedCount = 0
 $allFilesSucceeded = $true
 
 foreach ($file in $files) {
@@ -153,6 +168,20 @@ foreach ($file in $files) {
         $outputPath = Join-Path $file.Directory $outputName
     }
 
+    # Check if compression would actually save space
+    $sourceBitrate = Get-VideoBitrate -FilePath $file.FullName
+    if ($sourceBitrate -ne $null) {
+        $sourceBitrateKbps = [math]::Round($sourceBitrate / 1000, 0)
+
+        # Skip if source is already compressed below our target quality level
+        if ($sourceBitrateKbps -lt $settings.expectedBitrate) {
+            Write-Host "  Skipping (already efficient at $sourceBitrateKbps kbps, target: $($settings.expectedBitrate) kbps)" -ForegroundColor Yellow
+            $skippedCount++
+            Write-Host ""
+            continue
+        }
+    }
+
     # Compress video
     $ffmpegArgs = @(
         "-i", $file.FullName,
@@ -166,7 +195,7 @@ foreach ($file in $files) {
         $outputPath
     )
 
-    Write-Host "  Compressing..." -ForegroundColor Gray -NoNewline
+    Write-Host "  Compressing (source: $sourceBitrateKbps kbps)..." -ForegroundColor Gray -NoNewline
 
     # Run FFmpeg and capture output
     $ffmpegOutput = & ffmpeg @ffmpegArgs 2>&1 | Out-String
@@ -227,7 +256,10 @@ $totalSavedPercent = if ($totalOriginalSize -gt 0) {
 Write-Host "`n" + ("=" * 50) -ForegroundColor Cyan
 Write-Host "SUMMARY" -ForegroundColor Cyan
 Write-Host ("=" * 50) -ForegroundColor Cyan
-Write-Host "Files processed: $processedCount"
+Write-Host "Files compressed: $($processedCount - $skippedCount)"
+if ($skippedCount -gt 0) {
+    Write-Host "Files skipped (already efficient): $skippedCount" -ForegroundColor Yellow
+}
 Write-Host "Total original size: $([math]::Round($totalOriginalSize / 1MB, 2)) MB"
 Write-Host "Total compressed size: $([math]::Round($totalCompressedSize / 1MB, 2)) MB"
 Write-Host "Total saved: $([math]::Round($totalSaved / 1MB, 2)) MB ($totalSavedPercent%)" -ForegroundColor Green

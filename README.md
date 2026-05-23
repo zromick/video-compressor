@@ -171,6 +171,7 @@ C:\Videos\
 |---------|--------|
 | **Keeps originals** | ✅ Always (unless `-DeleteOriginal` used) |
 | **Skips processed** | ✅ Won't re-compress existing outputs |
+| **Smart skip** | ✅ Skips videos already compressed below target bitrate |
 | **Fail-safe** | ✅ Originals kept if compression fails |
 | **Progress tracking** | ✅ Real-time per-file updates |
 | **OneDrive compatible** | ✅ Use `-OutputDir` to avoid conflicts |
@@ -357,6 +358,9 @@ A: Avoids OneDrive sync conflicts, keeps source clean, easier to review before d
 
 **Q: Why use `-MoveToSource` instead of compressing directly to source?**  
 A: Cloud sync services (OneDrive, Dropbox, Google Drive) can interfere with FFmpeg writing files. Compressing to a temp location first, then moving when complete, avoids sync conflicts and corruption during encoding.
+
+**Q: Why are some files skipped as "already efficient"?**  
+A: The script checks each video's bitrate before compressing. If the source is already compressed below the target quality level (e.g., 972 kbps vs 1500 kbps target for medium), re-encoding would actually make the file larger. These are automatically skipped to save time and disk space.
 
 ---
 
