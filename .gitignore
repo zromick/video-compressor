@@ -1,0 +1,14 @@
+# Ignore all video files
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wmv
+*.flv
+*.webm
+
+# Ignore test outputs
+*_TEST_compressed*
+
+# Ignore compressed outputs
+*_compressed*
