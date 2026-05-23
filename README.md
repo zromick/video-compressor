@@ -326,6 +326,9 @@ A: Yes, press Ctrl+C. Already compressed files won't be re-processed.
 **Q: What if I close my laptop during compression?**  
 A: Sleep/hibernate: Process pauses and resumes when you wake it. Shutdown: Process stops but you can restart - already compressed files are skipped automatically.
 
+**Q: What if I run out of disk space during compression?**  
+A: FFmpeg fails gracefully - originals remain safe, already compressed files are intact. Free up space and restart - completed files are automatically skipped.
+
 **Q: How long does this take?**  
 A: ~1-5 minutes per GB on modern CPUs. 372 videos ≈ 6-12 hours.
 
