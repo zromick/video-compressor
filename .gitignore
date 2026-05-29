@@ -20,4 +20,4 @@
 *_compressed*
 
 # Ignore logs
-output_logs.txt
+output_logs*.txt

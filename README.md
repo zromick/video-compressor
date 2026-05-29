@@ -1,399 +1,132 @@
 # 🎥 Video Compressor
 
-**Batch compress videos to save 40-70% disk space while keeping your originals safe.**
+Batch compress videos to save 40-70% disk space while keeping your originals safe.
 
 Supports: MP4, MOV, AVI, MKV, WMV, FLV, WebM, M4V, 3GP, MPG, MPEG, M2V, OGV
 
-Works on any folder - perfect for OneDrive, external drives, or network shares. Outputs to a separate location with mirrored folder structure.
-
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### 1. Install FFmpeg (one-time)
+### Install FFmpeg (one-time)
 
 ```powershell
 winget install FFmpeg
 ```
 
-### 2. Choose Your Method
+### Compress Videos
 
-| Method | Best For | How to Use |
-|--------|----------|------------|
-| **🎯 Folder Picker** | Beginners, one-time use | Double-click `Compress Videos.bat` |
-| **🖱️ Right-Click Menu** | Regular use, multiple folders | Install via `install-context-menu.ps1` |
-| **💻 Command Line** | Power users, automation | `.\compress-videos.ps1 -Path "C:\Videos"` |
+**Folder Picker (easiest):**
+```
+Double-click: Compress Videos.bat
+```
 
----
-
-## 💡 Common Use Cases
-
-### Compress to Desktop (OneDrive Safe)
-
+**Command Line:**
 ```powershell
-.\compress-videos.ps1 `
-  -Path "C:\Users\YourName\OneDrive\Videos" `
-  -OutputDir "C:\Users\YourName\Desktop\CompressedVideos"
+# Compress to separate folder (recommended)
+.\compress-videos.ps1 -Path "C:\Videos" -OutputDir "C:\Compressed"
+
+# Compress in place (creates *_compressed.mp4 files)
+.\compress-videos.ps1 -Path "C:\Videos"
+
+# Process limited number
+.\compress-videos.ps1 -Path "C:\Videos" -MaxVideos 10
+
+# Save timestamped log
+.\compress-videos.ps1 -Path "C:\Videos" -LogOutput
 ```
 
-**What this does:**
-- Reads from OneDrive (or any source)
-- Outputs to Desktop with mirrored folder structure
-- Avoids OneDrive sync conflicts
-- Keeps originals safe
-
-**Example:**
-```
-Source: OneDrive\Videos\2024\Vacation\video.mp4
-Output: Desktop\CompressedVideos\2024\Vacation\video.mp4
-```
-
-### Compress in Place
-
+**Right-Click Menu:**
 ```powershell
-.\compress-videos.ps1 -Path "C:\LocalVideos"
-```
+# Run as Administrator
+.\install-context-menu.ps1
 
-Creates `*_compressed.mp4` files in the same folder.
-
-### OneDrive: Compress, Move Back, Auto-Cleanup
-
-```powershell
-.\compress-videos.ps1 `
-  -Path "C:\Users\YourName\OneDrive\Videos" `
-  -OutputDir "C:\Users\YourName\Desktop\Temp" `
-  -MoveToSource `
-  -DeleteOutputDir
-```
-
-**What this does:**
-- Compresses to Desktop (avoids OneDrive sync during encoding)
-- Moves compressed files back to OneDrive next to originals
-- Deletes temp folder automatically after completion
-
-### Test One File First
-
-```powershell
-.\test-single-file.ps1 -File "C:\Videos\test.mp4" -Quality medium
-```
-
-### Install Right-Click Menu
-
-1. Right-click `install-context-menu.ps1`
-2. "Run as Administrator"
-3. Now right-click any folder → "Compress Videos Here"
-
----
-
-## 🎚️ Quality Options
-
-| Quality | CRF | Size Reduction | Visual Quality | Speed |
-|---------|-----|----------------|----------------|-------|
-| **low** | 28 | 50-70% | Noticeable | Fast |
-| **medium** ⭐ | 23 | 40-60% | Excellent | Medium |
-| **high** | 20 | 20-40% | Near-identical | Slow |
-
-⭐ Recommended default
-
-```powershell
-# Maximum compression
-.\compress-videos.ps1 -Path "C:\Videos" -Quality low
-
-# Better quality
-.\compress-videos.ps1 -Path "C:\Videos" -Quality high
+# Now: Right-click any folder → "Compress Videos Here"
 ```
 
 ---
 
-## 🔧 All Options
+## Options
 
 ```powershell
 .\compress-videos.ps1 `
-  -Path "C:\Source\Folder" `
-  -OutputDir "C:\Output\Folder" `
+  -Path "C:\Videos" `
+  -OutputDir "C:\Output" `
   -Quality medium `
   [-NoRecursive] `
-  [-DeleteOriginal]
+  [-DeleteOriginal] `
+  [-MaxVideos 10] `
+  [-LogOutput]
 ```
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `-Path` | String | `.` | Source folder with videos |
-| `-OutputDir` | String | `null` | Output folder (mirrors source structure) |
-| `-Quality` | String | `medium` | `low` \| `medium` \| `high` |
-| `-NoRecursive` | Switch | Off | Only process top folder (no subfolders) |
-| `-DeleteOriginal` | Switch | Off | ⚠️ Delete source files after compression |
-| `-MoveToSource` | Switch | Off | Move compressed files to source location (requires `-OutputDir`) |
-| `-DeleteOutputDir` | Switch | Off | Delete output directory after moving all files (requires `-MoveToSource`) |
-
-**Note:** When using `-OutputDir`, files are always kept in source location (no `_compressed` suffix).
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-Path` | `.` | Source folder |
+| `-OutputDir` | `null` | Output folder (mirrors source structure) |
+| `-Quality` | `medium` | `low` (50-70% savings) \| `medium` (40-60%) \| `high` (20-40%) |
+| `-NoRecursive` | Off | Skip subfolders |
+| `-DeleteOriginal` | Off | Delete source files after compression |
+| `-MaxVideos` | 0 | Process up to N videos (0 = unlimited) |
+| `-LogOutput` | Off | Create timestamped log file (e.g., `output_logs_2026-05-29_143022.txt`) |
 
 ---
 
-## 📁 How Folder Structure Works
+## Safety Features
 
-### With `-OutputDir` (Recommended)
-
-```
-Source: C:\Videos\
-├── 2024\
-│   ├── Vacation\
-│   │   └── video.mp4          (100 MB)
-│   └── Birthday\
-│       └── party.mp4           (200 MB)
-
-Output: C:\Compressed\
-├── 2024\
-│   ├── Vacation\
-│   │   └── video.mp4          (40 MB) ← Compressed
-│   └── Birthday\
-│       └── party.mp4           (80 MB) ← Compressed
-```
-
-### Without `-OutputDir` (In-Place)
-
-```
-Before:
-C:\Videos\
-└── video.mp4                   (100 MB)
-
-After:
-C:\Videos\
-├── video.mp4                   (100 MB) ← Original
-└── video_compressed.mp4        (40 MB)  ← New
-```
+- ✅ Keeps originals by default
+- ✅ Skips already compressed files
+- ✅ Skips videos already below target bitrate
+- ✅ Auto-stops if disk space insufficient
 
 ---
 
-## 🛡️ Safety Features
+## Troubleshooting
 
-| Feature | Status |
-|---------|--------|
-| **Keeps originals** | ✅ Always (unless `-DeleteOriginal` used) |
-| **Skips processed** | ✅ Won't re-compress existing outputs |
-| **Smart skip** | ✅ Skips videos already compressed below target bitrate |
-| **Fail-safe** | ✅ Originals kept if compression fails |
-| **Progress tracking** | ✅ Real-time per-file updates |
-| **OneDrive compatible** | ✅ Use `-OutputDir` to avoid conflicts |
-
----
-
-## 📊 Example Output
-
-```
-Video Compression Settings:
-  Quality: medium - Balanced quality/size (recommended)
-  CRF: 23 | Preset: medium
-  Recursive: True
-  Keep originals: True (creates _compressed.mp4 files)
-  Output directory: C:\Users\Me\Desktop\CompressedVideos (mirrored structure)
-
-Found 372 video(s) to compress
-
-[1/372] Processing: Videos 2008\Zac and David's Podcast\video.mp4
-  Compressing... Done!
-  Original: 450.25 MB
-  Compressed: 180.10 MB
-  Saved: 270.15 MB (60.0%)
-  Original kept in source location
-
-...
-
-==================================================
-SUMMARY
-==================================================
-Files processed: 372
-Total original size: 125,450 MB (122.5 GB)
-Total compressed size: 50,180 MB (49.0 GB)
-Total saved: 75,270 MB (73.5 GB) - 60.0%
-==================================================
-```
-
----
-
-## 🚀 Advanced Usage
-
-### Batch Multiple Folders
-
-```powershell
-$folders = @(
-    "C:\Videos\2024",
-    "C:\Videos\2023",
-    "C:\Videos\2022"
-)
-
-foreach ($folder in $folders) {
-    .\compress-videos.ps1 -Path $folder -OutputDir "C:\Compressed"
-}
-```
-
-### Scheduled Compression
-
-```powershell
-# Create a scheduled task that runs weekly
-$action = New-ScheduledTaskAction `
-  -Execute "PowerShell.exe" `
-  -Argument "-ExecutionPolicy Bypass -File C:\Tools\compress-videos.ps1 -Path C:\Videos -OutputDir C:\Compressed"
-
-$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 2am
-
-Register-ScheduledTask `
-  -TaskName "Weekly Video Compression" `
-  -Action $action `
-  -Trigger $trigger
-```
-
-### Add to Windows PATH
-
-1. Move folder to: `C:\Tools\video-compressor`
-2. Add to PATH:
-   - Win+X → System → Advanced → Environment Variables
-   - User variables → Path → Edit → New
-   - Add: `C:\Tools\video-compressor`
-
-Then run from anywhere:
-```powershell
-compress-videos.ps1 -Path "C:\Any\Folder" -OutputDir "C:\Output"
-```
-
----
-
-## 📝 Files Included
-
-| File | Purpose |
-|------|---------|
-| `compress-videos.ps1` | Main compression script (supports -PickFolder for GUI) |
-| `Compress Videos.bat` | Folder picker launcher (double-click to run) |
-| `test-single-file.ps1` | Test on one video |
-| `install-context-menu.ps1` | Add right-click menu |
-| `README.md` | This file |
-| `.gitignore` | Git ignore rules |
-
----
-
-## ❓ Troubleshooting
-
-### FFmpeg not installed
-
+**FFmpeg not installed:**
 ```powershell
 winget install FFmpeg
 ```
 
-Or download from: https://ffmpeg.org/download.html
-
-### "Cannot run scripts" error
-
+**"Cannot run scripts":**
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### OneDrive sync conflicts
+**Cloud sync conflicts (OneDrive, Dropbox, Google Drive):**
 
-Use `-OutputDir` to output to a non-OneDrive location:
+Move files out of cloud-synced folders before compressing. Cloud services can mark files as read-only during sync, causing FFmpeg permission errors.
 
-```powershell
-.\compress-videos.ps1 `
-  -Path "C:\Users\Me\OneDrive\Videos" `
-  -OutputDir "C:\Users\Me\Desktop\Compressed"
-```
+Best practice:
+1. Move videos to local folder (e.g., `C:\Temp\Videos`)
+2. Compress them
+3. Move compressed files back if desired
 
-### Videos look too compressed
+Or use `-OutputDir` to output to non-synced location.
 
-```powershell
-.\compress-videos.ps1 -Path "C:\Videos" -Quality high
-```
-
-### Script is slow
-
-- Use `-Quality low` for faster encoding
-- Close CPU-intensive programs
-- Video encoding is CPU-intensive (normal)
-- Consider running overnight for large collections
-
-### Context menu not appearing
-
-1. Did you run `install-context-menu.ps1` as Administrator?
-2. Log out and back in
-3. Check Registry: `HKEY_CLASSES_ROOT\Directory\shell\CompressVideos`
-
-### Uninstall context menu
-
+**Uninstall right-click menu:**
 ```powershell
 .\install-context-menu.ps1 -Uninstall
 ```
 
 ---
 
-## 🤔 FAQ
+## FAQ
 
-**Q: Will this delete my original videos?**  
-A: No by default. Only if you explicitly use `-DeleteOriginal` flag.
+**Will this delete my videos?**  
+No, unless you use `-DeleteOriginal`.
 
-**Q: Do I need to move my videos?**  
-A: No! Use `-OutputDir` to compress to a different location.
+**Will this reduce quality?**  
+Slightly. Most people won't notice with medium/high settings.
 
-**Q: Will this reduce quality?**  
-A: Slightly, but most people won't notice with medium/high settings. Test first!
+**Can I stop mid-compression?**  
+Yes (Ctrl+C). Already compressed files won't be re-processed.
 
-**Q: What formats are supported?**  
-A: Input: MP4, MOV, AVI, MKV, WMV, FLV, WebM, M4V, 3GP, MPG, MPEG, M2V, OGV. Output is always MP4 (H.264 + AAC).
+**What if I run out of disk space?**  
+Script auto-checks before each video and stops safely if space is low.
 
-**Q: Can I stop mid-compression?**  
-A: Yes, press Ctrl+C. Already compressed files won't be re-processed.
-
-**Q: What if I close my laptop during compression?**  
-A: Sleep/hibernate: Process pauses and resumes when you wake it. Shutdown: Process stops but you can restart - already compressed files are skipped automatically.
-
-**Q: What if I run out of disk space during compression?**  
-A: FFmpeg fails gracefully - originals remain safe, already compressed files are intact. Free up space and restart - completed files are automatically skipped.
-
-**Q: How long does this take?**  
-A: ~1-5 minutes per GB on modern CPUs. 372 videos ≈ 6-12 hours.
-
-**Q: Can I use this on external drives?**  
-A: Yes! Works on local, USB, network, and cloud drives.
-
-**Q: Why use `-OutputDir`?**  
-A: Avoids OneDrive sync conflicts, keeps source clean, easier to review before deleting originals.
-
-**Q: Why use `-MoveToSource` instead of compressing directly to source?**  
-A: Cloud sync services (OneDrive, Dropbox, Google Drive) can interfere with FFmpeg writing files. Compressing to a temp location first, then moving when complete, avoids sync conflicts and corruption during encoding.
-
-**Q: Why are some files skipped as "already efficient"?**  
-A: The script checks each video's bitrate before compressing. If the source is already compressed below the target quality level (e.g., 972 kbps vs 1500 kbps target for medium), re-encoding would actually make the file larger. These are automatically skipped to save time and disk space.
+**How long does this take?**  
+~1-5 minutes per GB on modern CPUs.
 
 ---
 
-## 🔍 Technical Details
-
-### FFmpeg Command
-
-```bash
-ffmpeg -i input.mp4 \
-  -c:v libx264 \           # H.264 video codec
-  -crf 23 \                # Quality (lower = better)
-  -preset medium \         # Encoding speed
-  -c:a aac \               # AAC audio codec
-  -b:a 128k \              # Audio bitrate
-  -movflags +faststart \   # Web streaming optimization
-  output.mp4
-```
-
-### Why These Settings?
-
-- **H.264** - Universal compatibility
-- **CRF 23** - Visually transparent for most content
-- **AAC 128k** - Transparent audio quality
-- **medium preset** - Balanced speed/compression
-
-### How It Works
-
-1. Recursively scans source folder for `*.mp4` files
-2. Creates mirrored folder structure in output (if `-OutputDir` used)
-3. Encodes each video with FFmpeg
-4. Tracks progress and calculates space savings
-5. Skips files that already exist in output
-
----
-
-**Video Compressor** | Save disk space safely and easily | v1.0
+**Video Compressor** | v1.0
