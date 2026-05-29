@@ -10,8 +10,8 @@ param(
     [string]$OutputSuffix = "_compressed",
     [string]$OutputDir = $null,  # Optional: Output to a different directory with mirrored structure
     [switch]$PickFolder,  # Show GUI folder picker dialog
-    [switch]$MoveToSource,  # Move compressed files back to source location (requires -OutputDir)
-    [switch]$DeleteOutputDir  # Delete OutputDir after moving all files (requires -MoveToSource)
+    [int]$MaxVideos = 0,  # Optional: Maximum number of videos to process (0 = unlimited)
+    [switch]$LogOutput  # Optional: Create timestamped log file of the compression process
 )
 
 # Show folder picker if requested
@@ -52,15 +52,12 @@ if (-not (Test-FFmpeg)) {
     exit 1
 }
 
-# Validate parameter dependencies
-if ($MoveToSource -and -not $OutputDir) {
-    Write-Host "Error: -MoveToSource requires -OutputDir to be specified" -ForegroundColor Red
-    exit 1
-}
-
-if ($DeleteOutputDir -and -not $MoveToSource) {
-    Write-Host "Error: -DeleteOutputDir requires -MoveToSource to be enabled" -ForegroundColor Red
-    exit 1
+# Start logging if requested
+if ($LogOutput) {
+    $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
+    $logPath = Join-Path $PSScriptRoot "output_logs_$timestamp.txt"
+    Start-Transcript -Path $logPath -Append | Out-Null
+    Write-Host "Logging to: $logPath`n" -ForegroundColor Gray
 }
 
 # Quality presets (CRF values: lower = better quality, higher = smaller file)
@@ -86,6 +83,45 @@ function Get-VideoBitrate {
     }
 }
 
+# Function to get free disk space on a drive
+function Get-FreeDiskSpace {
+    param([string]$Path)
+    try {
+        $drive = (Get-Item $Path).PSDrive
+        return $drive.Free
+    } catch {
+        return $null
+    }
+}
+
+# Function to get video duration in seconds
+function Get-VideoDuration {
+    param([string]$FilePath)
+    try {
+        $durationStr = & ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $FilePath 2>&1
+        if ($durationStr -match '^\d+\.?\d*$') {
+            return [double]$durationStr
+        }
+        return $null
+    } catch {
+        return $null
+    }
+}
+
+# Function to estimate compressed file size
+function Get-EstimatedCompressedSize {
+    param(
+        [double]$Duration,
+        [int]$TargetBitrateKbps,
+        [int]$AudioBitrateKbps = 128
+    )
+    # Formula: (video bitrate + audio bitrate) * duration / 8 = size in KB
+    # Convert to bytes
+    $totalBitrateKbps = $TargetBitrateKbps + $AudioBitrateKbps
+    $estimatedBytes = ($totalBitrateKbps * $Duration * 1000) / 8
+    return $estimatedBytes
+}
+
 Write-Host "`nVideo Compression Settings:" -ForegroundColor Cyan
 Write-Host "  Quality: $Quality - $($settings.description)" -ForegroundColor Gray
 Write-Host "  CRF: $($settings.crf) | Preset: $($settings.preset)" -ForegroundColor Gray
@@ -93,12 +129,9 @@ Write-Host "  Recursive: $(-not $NoRecursive)" -ForegroundColor Gray
 Write-Host "  Keep originals: $(-not $DeleteOriginal) (creates _compressed.mp4 files)" -ForegroundColor Gray
 if ($OutputDir) {
     Write-Host "  Output directory: $OutputDir (mirrored structure)" -ForegroundColor Gray
-    if ($MoveToSource) {
-        Write-Host "  Move to source: Enabled (files moved after compression)" -ForegroundColor Gray
-    }
-    if ($DeleteOutputDir) {
-        Write-Host "  Delete output dir: Enabled (cleanup after completion)" -ForegroundColor Gray
-    }
+}
+if ($MaxVideos -gt 0) {
+    Write-Host "  Max videos to process: $MaxVideos" -ForegroundColor Gray
 }
 Write-Host ""
 
@@ -121,8 +154,14 @@ if ($OutputDir) {
         -not (Test-Path $outputPath)
     }
 } else {
-    # When outputting to same directory, skip files with _compressed suffix
-    $files = $files | Where-Object { $_.Name -notmatch "$OutputSuffix\.mp4$" }
+    # When outputting to same directory, skip files in two cases:
+    # 1. Files with _compressed in the name (already compressed)
+    # 2. Files whose compressed version already exists
+    $files = $files | Where-Object {
+        $hasCompressedSuffix = $_.BaseName -match "$OutputSuffix$"
+        $compressedVersionExists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + $_.Extension))
+        -not ($hasCompressedSuffix -or $compressedVersionExists)
+    }
 }
 
 if ($files.Count -eq 0) {
@@ -130,23 +169,46 @@ if ($files.Count -eq 0) {
     exit 0
 }
 
-Write-Host "Found $($files.Count) video(s) to compress`n" -ForegroundColor Green
+# Don't pre-limit files - we'll limit based on successful compressions
+Write-Host "Found $($files.Count) video(s) to process" -ForegroundColor Green
+if ($MaxVideos -gt 0) {
+    Write-Host "Will compress up to $MaxVideos videos (skipped videos don't count toward limit)`n" -ForegroundColor Green
+} else {
+    Write-Host ""
+}
+
+# Determine the output drive for disk space checks
+$outputDrive = if ($OutputDir) { $OutputDir } else { $searchPath.Path }
 
 $totalOriginalSize = 0
 $totalCompressedSize = 0
 $processedCount = 0
+$compressedCount = 0
 $skippedCount = 0
-$allFilesSucceeded = $true
 
 foreach ($file in $files) {
+    # Stop if we've reached the MaxVideos limit (only count compressed videos)
+    if ($MaxVideos -gt 0 -and $compressedCount -ge $MaxVideos) {
+        Write-Host "`nReached limit of $MaxVideos compressed videos. Stopping." -ForegroundColor Yellow
+        break
+    }
+
     $processedCount++
 
     # Show relative path for nested files
     $relativePath = $file.FullName.Substring($searchPath.Path.Length).TrimStart('\', '/')
-    Write-Host "[$processedCount/$($files.Count)] Processing: $relativePath" -ForegroundColor Cyan
+    Write-Host "[$processedCount] Processing: $relativePath" -ForegroundColor Cyan
 
     $originalSize = $file.Length
     $totalOriginalSize += $originalSize
+
+    # Check if there's enough disk space for this video
+    $freeSpace = Get-FreeDiskSpace -Path $outputDrive
+    if ($freeSpace -ne $null -and $freeSpace -lt $originalSize) {
+        Write-Host "  Insufficient disk space! Free: $([math]::Round($freeSpace / 1MB, 2)) MB, Needed: ~$([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Red
+        Write-Host "`nStopping compression - not enough disk space for remaining videos" -ForegroundColor Yellow
+        break
+    }
 
     # Generate output path
     if ($OutputDir) {
@@ -170,6 +232,8 @@ foreach ($file in $files) {
 
     # Check if compression would actually save space
     $sourceBitrate = Get-VideoBitrate -FilePath $file.FullName
+    $duration = Get-VideoDuration -FilePath $file.FullName
+
     if ($sourceBitrate -ne $null) {
         $sourceBitrateKbps = [math]::Round($sourceBitrate / 1000, 0)
 
@@ -179,6 +243,17 @@ foreach ($file in $files) {
             $skippedCount++
             Write-Host ""
             continue
+        }
+
+        # Estimate compressed size and skip if it would be larger
+        if ($duration -ne $null) {
+            $estimatedSize = Get-EstimatedCompressedSize -Duration $duration -TargetBitrateKbps $settings.expectedBitrate
+            if ($estimatedSize -ge $originalSize) {
+                Write-Host "  Skipping (estimated compressed size $([math]::Round($estimatedSize / 1MB, 2)) MB >= original $([math]::Round($originalSize / 1MB, 2)) MB)" -ForegroundColor Yellow
+                $skippedCount++
+                Write-Host ""
+                continue
+            }
         }
     }
 
@@ -203,6 +278,7 @@ foreach ($file in $files) {
     if (Test-Path $outputPath) {
         $compressedSize = (Get-Item $outputPath).Length
         $totalCompressedSize += $compressedSize
+        $compressedCount++  # Increment successful compression count
 
         $savedBytes = $originalSize - $compressedSize
         $savedPercent = [math]::Round(($savedBytes / $originalSize) * 100, 1)
@@ -211,21 +287,7 @@ foreach ($file in $files) {
         Write-Host "  Original: $([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Gray
         Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
         Write-Host "  Saved: $([math]::Round($savedBytes / 1MB, 2)) MB ($savedPercent%)" -ForegroundColor $(if ($savedPercent -gt 0) { "Green" } else { "Yellow" })
-
-        # Move to source location if requested
-        if ($MoveToSource) {
-            $sourceDir = $file.Directory.FullName
-            $movedFileName = $file.BaseName + $OutputSuffix + $file.Extension
-            $movedPath = Join-Path $sourceDir $movedFileName
-
-            try {
-                Move-Item -Path $outputPath -Destination $movedPath -Force
-                Write-Host "  Moved to source: $movedFileName" -ForegroundColor Cyan
-            } catch {
-                Write-Host "  Failed to move to source: $_" -ForegroundColor Red
-                $allFilesSucceeded = $false
-            }
-        }
+        Write-Host "  Compressed: $compressedCount/$MaxVideos" -ForegroundColor Cyan
 
         # Delete original only if explicitly requested AND not using separate output directory
         if ($DeleteOriginal -and -not $OutputDir) {
@@ -237,7 +299,6 @@ foreach ($file in $files) {
             Write-Host "  Kept original file" -ForegroundColor Gray
         }
     } else {
-        $allFilesSucceeded = $false
         Write-Host " Failed!" -ForegroundColor Red
         # Show last few lines of FFmpeg output for debugging
         $errorLines = $ffmpegOutput -split "`n" | Select-Object -Last 5
@@ -256,21 +317,17 @@ $totalSavedPercent = if ($totalOriginalSize -gt 0) {
 Write-Host "`n" + ("=" * 50) -ForegroundColor Cyan
 Write-Host "SUMMARY" -ForegroundColor Cyan
 Write-Host ("=" * 50) -ForegroundColor Cyan
-Write-Host "Files compressed: $($processedCount - $skippedCount)"
+Write-Host "Files processed: $processedCount"
+Write-Host "Files compressed: $compressedCount" -ForegroundColor Green
 if ($skippedCount -gt 0) {
-    Write-Host "Files skipped (already efficient): $skippedCount" -ForegroundColor Yellow
+    Write-Host "Files skipped (already efficient or would be larger): $skippedCount" -ForegroundColor Yellow
 }
 Write-Host "Total original size: $([math]::Round($totalOriginalSize / 1MB, 2)) MB"
 Write-Host "Total compressed size: $([math]::Round($totalCompressedSize / 1MB, 2)) MB"
 Write-Host "Total saved: $([math]::Round($totalSaved / 1MB, 2)) MB ($totalSavedPercent%)" -ForegroundColor Green
 Write-Host ("=" * 50) -ForegroundColor Cyan
 
-# Clean up output directory if requested and all files succeeded
-if ($DeleteOutputDir -and $MoveToSource -and $allFilesSucceeded) {
-    try {
-        Remove-Item -Path $OutputDir -Recurse -Force
-        Write-Host "`nCleaned up output directory: $OutputDir" -ForegroundColor Green
-    } catch {
-        Write-Host "`nFailed to delete output directory: $_" -ForegroundColor Yellow
-    }
+# Stop logging if it was started
+if ($LogOutput) {
+    Stop-Transcript | Out-Null
 }
