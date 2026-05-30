@@ -156,10 +156,10 @@ if ($OutputDir) {
 } else {
     # When outputting to same directory, skip files in two cases:
     # 1. Files with _compressed in the name (already compressed)
-    # 2. Files whose compressed version already exists
+    # 2. Files whose compressed version already exists (always .mp4)
     $files = $files | Where-Object {
         $hasCompressedSuffix = $_.BaseName -match "$OutputSuffix$"
-        $compressedVersionExists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + $_.Extension))
+        $compressedVersionExists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + ".mp4"))
         -not ($hasCompressedSuffix -or $compressedVersionExists)
     }
 }
@@ -226,7 +226,8 @@ foreach ($file in $files) {
         $outputPath = Join-Path $outputDirectory $outputName
     } else {
         # Output in same directory with suffix
-        $outputName = $file.BaseName + $OutputSuffix + $file.Extension
+        # Always output as .mp4 since we're encoding with H.264+AAC
+        $outputName = $file.BaseName + $OutputSuffix + ".mp4"
         $outputPath = Join-Path $file.Directory $outputName
     }
 
