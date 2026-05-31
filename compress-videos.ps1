@@ -83,6 +83,23 @@ function Get-VideoBitrate {
     }
 }
 
+# Function to check if video is already using H.264+AAC
+function Test-AlreadyH264AAC {
+    param([string]$FilePath)
+    try {
+        $codecInfo = & ffprobe -v error -select_streams v:0,a:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 $FilePath 2>&1
+        $codecs = $codecInfo -split "`n" | Where-Object { $_ -match '\S' }
+
+        # Check if video is h264 and audio is aac
+        $hasH264 = $codecs -contains 'h264'
+        $hasAAC = $codecs -contains 'aac'
+
+        return ($hasH264 -and $hasAAC)
+    } catch {
+        return $false
+    }
+}
+
 # Function to get free disk space on a drive
 function Get-FreeDiskSpace {
     param([string]$Path)
@@ -241,6 +258,16 @@ foreach ($file in $files) {
         # Skip if source is already compressed below our target quality level
         if ($sourceBitrateKbps -lt $settings.expectedBitrate) {
             Write-Host "  Skipping (already efficient at $sourceBitrateKbps kbps, target: $($settings.expectedBitrate) kbps)" -ForegroundColor Yellow
+            $skippedCount++
+            Write-Host ""
+            continue
+        }
+
+        # Skip if already H.264+AAC and bitrate is close to target (within 50%)
+        # Re-encoding same codec causes generation loss and can make file larger
+        $isAlreadyH264AAC = Test-AlreadyH264AAC -FilePath $file.FullName
+        if ($isAlreadyH264AAC -and $sourceBitrateKbps -lt ($settings.expectedBitrate * 2)) {
+            Write-Host "  Skipping (already H.264+AAC at $sourceBitrateKbps kbps, re-encoding would cause generation loss)" -ForegroundColor Yellow
             $skippedCount++
             Write-Host ""
             continue
