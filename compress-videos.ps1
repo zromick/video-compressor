@@ -179,10 +179,13 @@ if ($OutputDir) {
 } else {
     # When outputting to same directory, skip files in two cases:
     # 1. Files with _compressed in the name (already compressed)
-    # 2. Files whose compressed version already exists (always .mp4)
+    # 2. Files whose compressed version already exists (check for .mp4 or any extension)
     $files = $files | Where-Object {
         $hasCompressedSuffix = $_.BaseName -match "$OutputSuffix$"
-        $compressedVersionExists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + ".mp4"))
+        # Check if a compressed version exists with .mp4 extension OR with same extension
+        $compressedMp4Exists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + ".mp4"))
+        $compressedSameExtExists = Test-Path (Join-Path $_.Directory ($_.BaseName + $OutputSuffix + $_.Extension))
+        $compressedVersionExists = $compressedMp4Exists -or $compressedSameExtExists
         -not ($hasCompressedSuffix -or $compressedVersionExists)
     }
 }
