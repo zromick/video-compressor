@@ -11,7 +11,8 @@ param(
     [string]$OutputDir = $null,  # Optional: Output to a different directory with mirrored structure
     [switch]$PickFolder,  # Show GUI folder picker dialog
     [int]$MaxVideos = 0,  # Optional: Maximum number of videos to process (0 = unlimited)
-    [switch]$LogOutput  # Optional: Create timestamped log file of the compression process
+    [switch]$LogOutput,  # Optional: Create timestamped log file of the compression process
+    [bool]$SafeMode = $true  # Optional: Two-pass compression (test first, keep only if smaller). Default: true
 )
 
 # Show folder picker if requested
@@ -144,6 +145,7 @@ Write-Host "  Quality: $Quality - $($settings.description)" -ForegroundColor Gra
 Write-Host "  CRF: $($settings.crf) | Preset: $($settings.preset)" -ForegroundColor Gray
 Write-Host "  Recursive: $(-not $NoRecursive)" -ForegroundColor Gray
 Write-Host "  Keep originals: $(-not $DeleteOriginal) (creates _compressed.mp4 files)" -ForegroundColor Gray
+Write-Host "  Safe mode: $SafeMode (two-pass compression, keeps only if smaller)" -ForegroundColor Gray
 if ($OutputDir) {
     Write-Host "  Output directory: $OutputDir (mirrored structure)" -ForegroundColor Gray
 }
@@ -285,7 +287,17 @@ foreach ($file in $files) {
         }
     }
 
-    # Compress video
+    # Compress video (with optional two-pass safe mode)
+    $finalOutputPath = $outputPath
+
+    # In safe mode, compress to temp file first to verify size reduction
+    if ($SafeMode) {
+        $tempOutputPath = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + ".mp4")
+        $targetPath = $tempOutputPath
+    } else {
+        $targetPath = $outputPath
+    }
+
     $ffmpegArgs = @(
         "-i", $file.FullName,
         "-c:v", "libx264",
@@ -295,7 +307,7 @@ foreach ($file in $files) {
         "-b:a", "128k",
         "-movflags", "+faststart",
         "-y",
-        $outputPath
+        $targetPath
     )
 
     Write-Host "  Compressing (source: $sourceBitrateKbps kbps)..." -ForegroundColor Gray -NoNewline
@@ -303,19 +315,47 @@ foreach ($file in $files) {
     # Run FFmpeg and capture output
     $ffmpegOutput = & ffmpeg @ffmpegArgs 2>&1 | Out-String
 
-    if (Test-Path $outputPath) {
-        $compressedSize = (Get-Item $outputPath).Length
-        $totalCompressedSize += $compressedSize
-        $compressedCount++  # Increment successful compression count
-
+    if (Test-Path $targetPath) {
+        $compressedSize = (Get-Item $targetPath).Length
         $savedBytes = $originalSize - $compressedSize
         $savedPercent = [math]::Round(($savedBytes / $originalSize) * 100, 1)
 
-        Write-Host " Done!" -ForegroundColor Green
-        Write-Host "  Original: $([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Gray
-        Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
-        Write-Host "  Saved: $([math]::Round($savedBytes / 1MB, 2)) MB ($savedPercent%)" -ForegroundColor $(if ($savedPercent -gt 0) { "Green" } else { "Yellow" })
-        Write-Host "  Compressed: $compressedCount/$MaxVideos" -ForegroundColor Cyan
+        # Safe mode: check if compressed file is actually smaller
+        if ($SafeMode) {
+            if ($compressedSize -lt $originalSize) {
+                # Compressed file is smaller, move it to final location
+                Move-Item -Path $targetPath -Destination $finalOutputPath -Force
+                $totalCompressedSize += $compressedSize
+                $compressedCount++
+
+                Write-Host " Done!" -ForegroundColor Green
+                Write-Host "  Original: $([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Gray
+                Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
+                Write-Host "  Saved: $([math]::Round($savedBytes / 1MB, 2)) MB ($savedPercent%)" -ForegroundColor Green
+                Write-Host "  Compressed: $compressedCount/$MaxVideos" -ForegroundColor Cyan
+            } else {
+                # Compressed file is larger, delete it and skip
+                Remove-Item $targetPath -Force
+                $skippedCount++
+                Write-Host " Skipped!" -ForegroundColor Yellow
+                Write-Host "  Original: $([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Gray
+                Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
+                Write-Host "  Would be larger by $([math]::Round(-$savedBytes / 1MB, 2)) MB ($([math]::Abs($savedPercent))%)" -ForegroundColor Yellow
+                Write-Host "  Safe mode prevented enlargement" -ForegroundColor Cyan
+                Write-Host ""
+                continue
+            }
+        } else {
+            # Non-safe mode: keep regardless of size
+            $totalCompressedSize += $compressedSize
+            $compressedCount++
+
+            Write-Host " Done!" -ForegroundColor Green
+            Write-Host "  Original: $([math]::Round($originalSize / 1MB, 2)) MB" -ForegroundColor Gray
+            Write-Host "  Compressed: $([math]::Round($compressedSize / 1MB, 2)) MB" -ForegroundColor Gray
+            Write-Host "  Saved: $([math]::Round($savedBytes / 1MB, 2)) MB ($savedPercent%)" -ForegroundColor $(if ($savedPercent -gt 0) { "Green" } else { "Yellow" })
+            Write-Host "  Compressed: $compressedCount/$MaxVideos" -ForegroundColor Cyan
+        }
 
         # Delete original only if explicitly requested AND not using separate output directory
         if ($DeleteOriginal -and -not $OutputDir) {

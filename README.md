@@ -53,6 +53,7 @@ Double-click: Compress Videos.bat
   -Path "C:\Videos" `
   -OutputDir "C:\Output" `
   -Quality medium `
+  [-SafeMode $true] `
   [-NoRecursive] `
   [-DeleteOriginal] `
   [-MaxVideos 10] `
@@ -64,6 +65,7 @@ Double-click: Compress Videos.bat
 | `-Path` | `.` | Source folder |
 | `-OutputDir` | `null` | Output folder (mirrors source structure) |
 | `-Quality` | `medium` | `low` (50-70% savings) \| `medium` (40-60%) \| `high` (20-40%) |
+| `-SafeMode` | `$true` | Two-pass compression: compress to temp, verify size, keep only if smaller |
 | `-NoRecursive` | Off | Skip subfolders |
 | `-DeleteOriginal` | Off | Delete source files after compression |
 | `-MaxVideos` | 0 | Process up to N videos (0 = unlimited) |
@@ -73,10 +75,21 @@ Double-click: Compress Videos.bat
 
 ## Safety Features
 
+- ✅ **Safe Mode (enabled by default)**: Two-pass compression verifies files are smaller before keeping them
 - ✅ Keeps originals by default
 - ✅ Skips already compressed files
 - ✅ Skips videos already below target bitrate
+- ✅ Skips re-encoding H.264+AAC files (prevents generation loss)
 - ✅ Auto-stops if disk space insufficient
+
+### Safe Mode
+
+Safe Mode compresses to a temporary file first, checks the size, and only keeps it if it's actually smaller than the original. This prevents the rare case where re-encoding makes a file larger.
+
+**Disable for faster compression** (if you're confident in your settings):
+```powershell
+.\compress-videos.ps1 -Path "C:\Videos" -SafeMode $false
+```
 
 ---
 
