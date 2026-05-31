@@ -56,7 +56,11 @@ if (-not (Test-FFmpeg)) {
 # Start logging if requested
 if ($LogOutput) {
     $timestamp = Get-Date -Format "yyyy-MM-dd_HHmmss"
-    $logPath = Join-Path $PSScriptRoot "output_logs_$timestamp.txt"
+    $logDir = Join-Path $PSScriptRoot "OutputLogs"
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
+    $logPath = Join-Path $logDir "output_logs_$timestamp.txt"
     Start-Transcript -Path $logPath -Append | Out-Null
     Write-Host "Logging to: $logPath`n" -ForegroundColor Gray
 }
